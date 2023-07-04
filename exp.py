@@ -2,8 +2,10 @@ import numpy as np
 import torch
 
 from config import get_config, set_dir_attributes
+from core.metrics import compute_simple_regret
 from core.objectives import get_objective
 from core.optimization import bo_loop
+from core.uncertainty import get_discrete_uniform_dist
 from core.utils import (
     construct_bounds,
     construct_grid,
@@ -41,29 +43,39 @@ def run_exp(config):
         kernel=kernel, bounds=joint_bounds, config=config
     )
 
+    # Get reference and true distribution
+    ref_dist = get_discrete_uniform_dist(context_points=context_points)
+    # TODO: change true_dist, maybe make sure is within margin
+    true_dist = get_discrete_uniform_dist(context_points=context_points)
+
     # Get initial observations
-    init_X = joint_points[torch.randperm(len(joint_points))[: config.num_init_points]]
-    init_y = noisy_obj_func(init_X)
+    init_Z = joint_points[torch.randperm(len(joint_points))[: config.num_init_points]]
+    init_y = noisy_obj_func(init_Z)
 
     # Main BO loop
-    final_X, final_y = bo_loop(
-        train_X=init_X,
+    chosen_X, _, _ = bo_loop(
+        train_Z=init_Z,
         train_y=init_y,
         decision_points=decision_points,
         context_points=context_points,
         kernel=kernel,
         likelihood=likelihood,
         noisy_obj_func=noisy_obj_func,
+        ref_dist=ref_dist,
+        true_dist=true_dist,
         config=config,
     )
 
-    # Calculate regret TODO: change to stochastic version
-    chosen_X = final_X[config.num_init_points :]
-    chosen_vals = obj_func(chosen_X)
-    max_val = torch.max(obj_func(joint_points))
-    simple_regret = (
-        (max_val - torch.cummax(chosen_vals, dim=0)[0]).cpu().detach().numpy()
+    # Calculate regret
+    simple_regret = compute_simple_regret(
+        obj_func=obj_func,
+        decision_points=decision_points,
+        context_points=context_points,
+        ref_dist=ref_dist,
+        chosen_X=chosen_X,
+        config=config,
     )
+
     print(np.squeeze(simple_regret))
 
 
