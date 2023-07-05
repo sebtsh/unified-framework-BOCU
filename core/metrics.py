@@ -6,8 +6,14 @@ from core.utils import cross_product, get_discrete_fvals, get_indices_from_ref_a
 from core.uncertainty import compute_unc_objective
 
 
-def compute_simple_regret(
-    obj_func, decision_points, context_points, ref_dist, chosen_X, config
+def compute_regret(
+    obj_func,
+    decision_points,
+    context_points,
+    cvx_prob,
+    cvx_prob_plus_h,
+    chosen_X,
+    config,
 ):
     # Compute for all points
     joint_points = cross_product(decision_points, context_points)
@@ -18,21 +24,22 @@ def compute_simple_regret(
     )
     all_unc_obj_vals = compute_unc_objective(
         discrete_fvals=discrete_fvals,
-        ref_dist=ref_dist,
-        distance_name=config.distance_name,
+        cvx_prob=cvx_prob,
+        cvx_prob_plus_h=cvx_prob_plus_h,
         alpha=config.alpha,
-        eps_1=config.eps_1,
         eps_2=config.eps_2,
-        h=0.00001,  # use extra accurate one here
+        h=config.finite_diff_h,
     )
     chosen_idxs = get_indices_from_ref_array(input=chosen_X, ref=decision_points)
     chosen_vals = all_unc_obj_vals[chosen_idxs]
     max_val = np.max(all_unc_obj_vals)
-    simple_regret = (
+    simple_regret = np.squeeze(
         (max_val - torch.cummax(torch.tensor(chosen_vals), dim=0)[0])
         .cpu()
         .detach()
         .numpy()
     )
 
-    return simple_regret
+    cumu_regret = np.squeeze(np.cumsum(max_val - chosen_vals))
+
+    return simple_regret, cumu_regret

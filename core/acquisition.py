@@ -1,18 +1,31 @@
 import numpy as np
+import torch
 
-from core.uncertainty import compute_unc_objective
+from core.uncertainty import compute_unc_objective, compute_unc_objective_ucb
 from core.utils import cross_product, get_discrete_fvals
 
 
-def acquire(gp, decision_points, context_points, ref_dist, config):
+def acquire(gp, decision_points, context_points, cvx_prob, cvx_prob_plus_h, config):
     acquisition = config.acquisition
 
-    if acquisition == "ts":
+    if acquisition == "random":
+        best_idx = random(decision_points=decision_points)
+    elif acquisition == "ts":
         best_idx = thompson_sampling(
             gp=gp,
             decision_points=decision_points,
             context_points=context_points,
-            ref_dist=ref_dist,
+            cvx_prob=cvx_prob,
+            cvx_prob_plus_h=cvx_prob_plus_h,
+            config=config,
+        )
+    elif acquisition == "ucb":
+        best_idx = ucb(
+            gp=gp,
+            decision_points=decision_points,
+            context_points=context_points,
+            cvx_prob=cvx_prob,
+            cvx_prob_plus_h=cvx_prob_plus_h,
             config=config,
         )
     else:
@@ -21,7 +34,9 @@ def acquire(gp, decision_points, context_points, ref_dist, config):
     return decision_points[best_idx][None, :]
 
 
-def thompson_sampling(gp, decision_points, context_points, ref_dist, config):
+def thompson_sampling(
+    gp, decision_points, context_points, cvx_prob, cvx_prob_plus_h, config
+):
     gp.eval()
     joint_points = cross_product(decision_points, context_points)
     pred = gp(joint_points)
@@ -32,10 +47,9 @@ def thompson_sampling(gp, decision_points, context_points, ref_dist, config):
 
     unc_obj_vals = compute_unc_objective(
         discrete_fvals=discrete_fvals,
-        ref_dist=ref_dist,
-        distance_name=config.distance_name,
+        cvx_prob=cvx_prob,
+        cvx_prob_plus_h=cvx_prob_plus_h,
         alpha=config.alpha,
-        eps_1=config.eps_1,
         eps_2=config.eps_2,
         h=config.finite_diff_h,
     )
@@ -43,3 +57,38 @@ def thompson_sampling(gp, decision_points, context_points, ref_dist, config):
     best_idx = np.argmax(unc_obj_vals)
 
     return best_idx
+
+
+def ucb(gp, decision_points, context_points, cvx_prob, cvx_prob_plus_h, config):
+    gp.eval()
+    joint_points = cross_product(decision_points, context_points)
+
+    pred = gp(joint_points)
+    mean = pred.mean
+    variance = pred.variance
+    ucb_vals = mean + config.beta * torch.sqrt(variance)
+    lcb_vals = mean - config.beta * torch.sqrt(variance)
+    discrete_ucb_vals = get_discrete_fvals(
+        fvals=ucb_vals, decision_points=decision_points, context_points=context_points
+    )
+    discrete_lcb_vals = get_discrete_fvals(
+        fvals=lcb_vals, decision_points=decision_points, context_points=context_points
+    )
+
+    unc_obj_vals = compute_unc_objective_ucb(
+        discrete_ucb_vals=discrete_ucb_vals,
+        discrete_lcb_vals=discrete_lcb_vals,
+        cvx_prob=cvx_prob,
+        cvx_prob_plus_h=cvx_prob_plus_h,
+        alpha=config.alpha,
+        eps_2=config.eps_2,
+        h=config.finite_diff_h,
+    )
+
+    best_idx = np.argmax(unc_obj_vals)
+
+    return best_idx
+
+
+def random(decision_points):
+    return torch.randint(high=len(decision_points), size=(1,))[0].item()

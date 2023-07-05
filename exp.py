@@ -1,11 +1,11 @@
-import numpy as np
+import pickle
 import torch
 
 from config import get_config, set_dir_attributes
-from core.metrics import compute_simple_regret
+from core.metrics import compute_regret
 from core.objectives import get_objective
 from core.optimization import bo_loop
-from core.uncertainty import get_discrete_uniform_dist
+from core.uncertainty import create_cvx_prob, get_discrete_uniform_dist
 from core.utils import (
     construct_bounds,
     construct_grid,
@@ -37,7 +37,9 @@ def run_exp(config):
     joint_points = cross_product(decision_points, context_points)
 
     # Get objective function
-    kernel = create_kernel(config)
+    kernel = create_kernel(
+        dims=config.decision_dims + config.context_dims, config=config
+    )
     likelihood = create_likelihood(config)
     obj_func, noisy_obj_func = get_objective(
         kernel=kernel, bounds=joint_bounds, config=config
@@ -47,6 +49,29 @@ def run_exp(config):
     ref_dist = get_discrete_uniform_dist(context_points=context_points)
     # TODO: change true_dist, maybe make sure is within margin
     true_dist = get_discrete_uniform_dist(context_points=context_points)
+
+    # Create cvxpy problems. WARNING: currently assumes reference distribution and margin is the same for all
+    # iterations. If not true, new cvxpy problems must be created at every iteration
+    if config.distance_name == "mmd":
+        mmd_kernel = create_kernel(dims=config.context_dims, config=config)
+    else:
+        mmd_kernel = None
+    cvx_prob = create_cvx_prob(
+        p=ref_dist.cpu().detach().numpy(),
+        distance_name=config.distance_name,
+        eps=config.eps_1,
+        context_points=context_points,
+        mmd_kernel=mmd_kernel,
+        jitter=config.jitter,
+    )
+    cvx_prob_plus_h = create_cvx_prob(
+        p=ref_dist.cpu().detach().numpy(),
+        distance_name=config.distance_name,
+        eps=config.eps_1 + config.finite_diff_h,
+        context_points=context_points,
+        mmd_kernel=mmd_kernel,
+        jitter=config.jitter,
+    )
 
     # Get initial observations
     init_Z = joint_points[torch.randperm(len(joint_points))[: config.num_init_points]]
@@ -61,22 +86,30 @@ def run_exp(config):
         kernel=kernel,
         likelihood=likelihood,
         noisy_obj_func=noisy_obj_func,
-        ref_dist=ref_dist,
         true_dist=true_dist,
+        cvx_prob=cvx_prob,
+        cvx_prob_plus_h=cvx_prob_plus_h,
         config=config,
     )
 
     # Calculate regret
-    simple_regret = compute_simple_regret(
+    simple_regret, cumu_regret = compute_regret(
         obj_func=obj_func,
         decision_points=decision_points,
         context_points=context_points,
-        ref_dist=ref_dist,
+        cvx_prob=cvx_prob,
+        cvx_prob_plus_h=cvx_prob_plus_h,
         chosen_X=chosen_X,
         config=config,
     )
 
-    print(np.squeeze(simple_regret))
+    # Save results
+    pickle.dump(
+        (simple_regret, cumu_regret),
+        open(config.pickles_save_dir + config.filename + ".p", "wb"),
+    )
+
+    log("Run complete")
 
 
 if __name__ == "__main__":

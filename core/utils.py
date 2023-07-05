@@ -71,10 +71,9 @@ def uniform_samples(bounds, n_samples):
     return torch.rand(size=(n_samples, d), dtype=torch.double) * (high - low) + low
 
 
-def create_kernel(config):
-    dims = config.decision_dims + config.context_dims
+def create_kernel(dims, config):
     kernel = ScaleKernel(RBFKernel(ard_num_dims=dims))
-    kernel.outputscale = torch.tensor(config.outputscale)
+    kernel.outputscale = config.outputscale
     kernel.base_kernel.lengthscale = torch.tensor([config.lengthscale] * dims)
 
     return kernel

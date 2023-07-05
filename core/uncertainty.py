@@ -2,19 +2,18 @@ import cvxpy as cp
 import numpy as np
 import torch
 
+from core.utils import log
 
-def compute_unc_objective(
-    discrete_fvals, ref_dist, distance_name, alpha, eps_1, eps_2, h
-):
+
+def compute_unc_objective(discrete_fvals, cvx_prob, cvx_prob_plus_h, alpha, eps_2, h):
     """
     Computes g(x) = alpha * v_x(eps_1) + \delta_x(eps_1) * eps_2, where v_x is the distributionally robust value
     and \delta_x is the right derivative of v_x.
     :param discrete_fvals: Array of shape (|D|, |C|) where D is the decision variable set and C is the context variable
     set.
-    :param ref_dist: Probability distribution represented as an array of shape (|C|).
-    :param distance_name: Distribution distance. String.
+    :param cvx_prob:
+    :param cvx_prob_plus_h:
     :param alpha: float.
-    :param eps_1: float.
     :param eps_2: float.
     :param h: float. Finite difference amount.
     :return:
@@ -22,17 +21,12 @@ def compute_unc_objective(
     assert alpha > 0 or eps_2 > 0
     v_x = compute_dr_values(
         discrete_fvals=discrete_fvals,
-        ref_dist=ref_dist,
-        distance_name=distance_name,
-        eps=eps_1,
+        cvx_prob=cvx_prob,
     )
 
     if eps_2 > 0:
         v_x_plus_h = compute_dr_values(
-            discrete_fvals=discrete_fvals,
-            ref_dist=ref_dist,
-            distance_name=distance_name,
-            eps=eps_1 + h,
+            discrete_fvals=discrete_fvals, cvx_prob=cvx_prob_plus_h
         )
 
         delta_x = (v_x_plus_h - v_x) / h
@@ -42,17 +36,49 @@ def compute_unc_objective(
     return alpha * v_x + delta_x * eps_2
 
 
-def compute_dr_values(discrete_fvals, ref_dist, distance_name, eps):
+def compute_unc_objective_ucb(
+    discrete_ucb_vals, discrete_lcb_vals, cvx_prob, cvx_prob_plus_h, alpha, eps_2, h
+):
+    """
+    Same as compute_unc_objective except using upper and lower confidence bounds as functions.
+    :param discrete_ucb_vals: Array of shape (|D|, |C|) where D is the decision variable set and C is the context
+    variable set.
+    :param discrete_lcb_vals: Array of shape (|D|, |C|) where D is the decision variable set and C is the context
+    variable set.
+    :param cvx_prob:
+    :param cvx_prob_plus_h:
+    :param alpha: float.
+    :param eps_2: float.
+    :param h: float. Finite difference amount.
+    :return:
+    """
+    assert alpha > 0 or eps_2 > 0
+    v_x_ucb = compute_dr_values(
+        discrete_fvals=discrete_ucb_vals,
+        cvx_prob=cvx_prob,
+    )
+
+    if eps_2 > 0:
+        v_x_plus_h_ucb = compute_dr_values(
+            discrete_fvals=discrete_ucb_vals, cvx_prob=cvx_prob_plus_h
+        )
+        v_x_lcb = compute_dr_values(discrete_fvals=discrete_lcb_vals, cvx_prob=cvx_prob)
+
+        delta_x = (v_x_plus_h_ucb - v_x_lcb) / h
+    else:
+        delta_x = 0
+
+    return alpha * v_x_ucb + delta_x * eps_2
+
+
+def compute_dr_values(discrete_fvals, cvx_prob):
     """
     Computes distributionally robust values.
     :param discrete_fvals: Array of shape (|D|, |C|) where D is the decision variable set and C is the context variable
     set.
-    :param ref_dist: Probability distribution represented as an array of shape (|C|).
-    :param distance_name: Distribution distance. String.
-    :param eps: Margin, float.
+    :param cvx_prob:
     :return: Array of shape (|D|, ).
     """
-    cvx_prob = create_cvx_prob(p=ref_dist, distance_name=distance_name, eps=eps)
     dr_vals = []
     for i in range(len(discrete_fvals)):
         dr_val, _ = cvx_prob(discrete_fvals[i].cpu().detach().numpy())
@@ -61,7 +87,7 @@ def compute_dr_values(discrete_fvals, ref_dist, distance_name, eps):
     return np.array(dr_vals)
 
 
-def create_cvx_prob(p, distance_name, eps):
+def create_cvx_prob(p, distance_name, eps, context_points, mmd_kernel, jitter):
     """
 
     :param p: reference distribution.
@@ -73,10 +99,20 @@ def create_cvx_prob(p, distance_name, eps):
 
     q = cp.Variable(num_context)
     g = cp.Parameter(num_context)
+
     objective = cp.Minimize(q @ g)
 
+    constraints = [cp.sum(q) == 1.0, q >= 0.0]
     if distance_name == "tv":
-        constraints = [cp.sum(q) == 1.0, q >= 0.0, cp.norm(p - q, 1) <= eps]
+        constraints.append(cp.norm(p - q, 1) <= eps)
+    elif distance_name == "mmd":
+        M = (
+            mmd_kernel(context_points).evaluate().cpu().detach().numpy()
+            + np.eye(len(context_points)) * jitter
+        )
+        L = np.linalg.cholesky(M)
+        assert np.allclose(L @ L.T, M)
+        constraints.append(cp.norm(L.T @ (p - q), 2) <= eps)
     else:
         raise NotImplementedError
 
@@ -87,7 +123,7 @@ def create_cvx_prob(p, distance_name, eps):
         try:
             value = prob.solve(warm_start=True)
         except:
-            print("Default solver failed, trying SCS")
+            log("Default solver failed, trying SCS")
             value = prob.solve(solver="SCS", warm_start=True)
         sol = q.value
 
@@ -113,3 +149,14 @@ def tv(p, q):
     :return: float
     """
     return torch.linalg.norm(p - q, ord=1)
+
+
+def check_psd(A):
+    # check symmetric
+    assert np.allclose(A, A.T)
+    # check eigenvalues
+    eigvals = np.linalg.eigvalsh(A)
+    assert np.min(eigvals) > 0
+    # probably not necessary but
+    sign, logdet = np.linalg.slogdet(A)
+    assert np.allclose(sign, 1.0)

@@ -14,8 +14,9 @@ def bo_loop(
     kernel,
     likelihood,
     noisy_obj_func,
-    ref_dist,
     true_dist,
+    cvx_prob,
+    cvx_prob_plus_h,
     config,
 ):
     chosen_X = []
@@ -32,7 +33,8 @@ def bo_loop(
             gp=gp,
             decision_points=decision_points,
             context_points=context_points,
-            ref_dist=ref_dist,
+            cvx_prob=cvx_prob,
+            cvx_prob_plus_h=cvx_prob_plus_h,
             config=config,
         )  # (1, d)
 
