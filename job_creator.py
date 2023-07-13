@@ -7,9 +7,9 @@ is_delete = True
 
 tasks = ["gp"]
 distance_names = ["mmd", "tv"]
+unc_objs = ["dro, wcs, gen"]
 alphas = [1.0]
-eps_1s = [0.5]
-eps_2s = [1.0]
+betas = [1.0]
 acquisitions = ["ts", "ucb", "random"]
 seeds = range(5)
 
@@ -21,21 +21,19 @@ for task in tasks:
     pickles_dir = base_dir + "pickles/"
     Path(pickles_dir).mkdir(parents=True, exist_ok=True)
     for distance_name in distance_names:
-        for alpha in alphas:
-            for eps_1 in eps_1s:
-                for eps_2 in eps_2s:
-                    for acquisition in acquisitions:
-                        for seed in seeds:
-                            filename = (
-                                f"{task}_dist{distance_name}_{alpha}_{eps_1}"
-                                f"_{eps_2}_acq{acquisition}_seed{seed}"
-                            )
-                            filename = filename.replace(".", ",") + ".p"
-                            if not os.path.isfile(pickles_dir + filename):
-                                if filename not in missing_filenames:
-                                    missing_filenames.append(filename)
-                                    print(f"{counter}. {filename} is missing")
-                                    counter += 1
+        for unc_obj in unc_objs:
+            for acquisition in acquisitions:
+                for seed in seeds:
+                    filename = (
+                        f"{task}_dist{distance_name}_unc{unc_obj}"
+                        f"_acq{acquisition}_seed{seed}"
+                    )
+                    filename = filename.replace(".", ",") + ".p"
+                    if not os.path.isfile(pickles_dir + filename):
+                        if filename not in missing_filenames:
+                            missing_filenames.append(filename)
+                            print(f"{counter}. {filename} is missing")
+                            counter += 1
 
 if create_jobs:
     # Create job files

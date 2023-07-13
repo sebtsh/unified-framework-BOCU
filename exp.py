@@ -1,11 +1,17 @@
+import numpy as np
 import pickle
 import torch
 
-from config import get_config, set_dir_attributes
+from config import get_config, set_dir_attributes, set_unc_attributes
 from core.metrics import compute_regret
 from core.objectives import get_objective
 from core.optimization import bo_loop
-from core.uncertainty import create_cvx_prob, get_discrete_uniform_dist
+from core.uncertainty import (
+    compute_distance,
+    create_cvx_prob,
+    get_discrete_normal_dist,
+    get_discrete_uniform_dist,
+)
 from core.utils import (
     construct_bounds,
     construct_grid,
@@ -19,6 +25,7 @@ from core.utils import (
 def run_exp(config):
     log(f"======== NEW RUN ========")
     config = set_dir_attributes(config)
+    config = set_unc_attributes(config)
     for arg in vars(config):
         print(f"{arg}: {getattr(config, arg)}")
     torch.manual_seed(config.seed)
@@ -48,22 +55,33 @@ def run_exp(config):
     )
 
     # Get reference and true distribution
-    ref_dist = get_discrete_uniform_dist(context_points=context_points)
-    # TODO: change true_dist, maybe make sure is within margin
+    ref_mean = config.ref_mean * np.ones(config.context_dims)
+    ref_cov = config.ref_var * np.eye(config.context_dims)
+    ref_dist = get_discrete_normal_dist(
+        context_points=context_points, mean=ref_mean, cov=ref_cov
+    )
     true_dist = get_discrete_uniform_dist(context_points=context_points)
-
-    # Create cvxpy problems. WARNING: currently assumes reference distribution and margin is the same for all
-    # iterations. If not true, new cvxpy problems must be created at every iteration
     if config.distance_name == "mmd":
         mmd_kernel = create_kernel(
             dims=config.context_dims, kernel_name=config.kernel, config=config
         )
+        M = mmd_kernel(context_points)
     else:
         mmd_kernel = None
+        M = None
+    if config.unc_obj == "wcs":
+        eps = 0.0
+    else:
+        eps = compute_distance(
+            p=ref_dist, q=true_dist, M=M, distance_name=config.distance_name
+        )
+
+    # Create cvxpy problems. WARNING: currently assumes reference distribution and margin is the same for all
+    # iterations. If not true, new cvxpy problems must be created at every iteration
     cvx_prob = create_cvx_prob(
         p=ref_dist.cpu().detach().numpy(),
         distance_name=config.distance_name,
-        eps=config.eps_1,
+        eps=eps,
         context_points=context_points,
         mmd_kernel=mmd_kernel,
         jitter=config.jitter,
@@ -71,7 +89,7 @@ def run_exp(config):
     cvx_prob_plus_h = create_cvx_prob(
         p=ref_dist.cpu().detach().numpy(),
         distance_name=config.distance_name,
-        eps=config.eps_1 + config.finite_diff_h,
+        eps=eps + config.finite_diff_h,
         context_points=context_points,
         mmd_kernel=mmd_kernel,
         jitter=config.jitter,
@@ -96,20 +114,46 @@ def run_exp(config):
         config=config,
     )
 
-    # Calculate regret
-    simple_regret, cumu_regret = compute_regret(
+    # Calculate regret wrt approximate objective
+    simple_regret_approx, cumu_regret_approx = compute_regret(
         obj_func=obj_func,
         decision_points=decision_points,
         context_points=context_points,
         cvx_prob=cvx_prob,
         cvx_prob_plus_h=cvx_prob_plus_h,
+        h=config.finite_diff_h,
+        chosen_X=chosen_X,
+        config=config,
+    )
+
+    # Calculate regret wrt to "true" objective (more accurate via smaller h)
+    cvx_prob_plus_h_reduced = create_cvx_prob(
+        p=ref_dist.cpu().detach().numpy(),
+        distance_name=config.distance_name,
+        eps=eps + config.finite_diff_h * 1e-02,
+        context_points=context_points,
+        mmd_kernel=mmd_kernel,
+        jitter=config.jitter,
+    )
+    simple_regret_true, cumu_regret_true = compute_regret(
+        obj_func=obj_func,
+        decision_points=decision_points,
+        context_points=context_points,
+        cvx_prob=cvx_prob,
+        cvx_prob_plus_h=cvx_prob_plus_h_reduced,
+        h=config.finite_diff_h * 1e-02,
         chosen_X=chosen_X,
         config=config,
     )
 
     # Save results
     pickle.dump(
-        (simple_regret, cumu_regret),
+        (
+            simple_regret_approx,
+            cumu_regret_approx,
+            simple_regret_true,
+            cumu_regret_true,
+        ),
         open(config.pickles_save_dir + config.filename + ".p", "wb"),
     )
 

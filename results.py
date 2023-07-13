@@ -7,9 +7,8 @@ import pickle
 
 tasks = ["gp"]
 distance_names = ["mmd", "tv"]
-alphas = [1.0]
-eps_1s = [0.5]
-eps_2s = [1.0]
+alphas = [1.0]  # TODO: Refactor everything to take unc_objs = ["dro, wcs, gen"]
+betas = [1.0]
 acquisitions = ["ts", "ucb", "random"]
 seeds = range(5)
 T = 400
@@ -47,8 +46,7 @@ final_regrets_dict = {}
 
 # for now
 alpha = alphas[0]
-eps_1 = eps_1s[0]
-eps_2 = eps_2s[0]
+beta = betas[0]
 
 for i, distance_name in enumerate(distance_names):
     axs_simple = all_axs_simple[i]
@@ -65,8 +63,8 @@ for i, distance_name in enumerate(distance_names):
         cumu_regrets = []
         for seed in seeds:
             filename = (
-                f"{task}_dist{distance_name}_{alpha}_{eps_1}"
-                f"_{eps_2}_acq{acquisition}_seed{seed}"
+                f"{task}_dist{distance_name}_{alpha}"
+                f"_{beta}_acq{acquisition}_seed{seed}"
             )
             filename = filename.replace(".", ",") + ".p"
             if not os.path.isfile(pickles_dir + filename):
@@ -127,7 +125,7 @@ for i, distance_name in enumerate(distance_names):
         axs_cumu.legend(fontsize=text_size - 2)
 
 fig_simple.suptitle(
-    f"{task}: $\\alpha={alpha}$, $\\epsilon_1={eps_1}$, $\\epsilon_2={eps_2}$",
+    f"{task}: $\\alpha={alpha}$, $\\epsilon_2={beta}$",
     size=text_size,
 )
 fig_simple.tight_layout()
@@ -139,7 +137,7 @@ fig_simple.savefig(
 )
 
 fig_cumu.suptitle(
-    f"{task}: $\\alpha={alpha}$, $\\epsilon_1={eps_1}$, $\\epsilon_2={eps_2}$",
+    f"{task}: $\\alpha={alpha}$, $\\epsilon_2={beta}$",
     size=text_size,
 )
 fig_cumu.tight_layout()

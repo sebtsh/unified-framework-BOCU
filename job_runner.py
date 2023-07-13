@@ -18,11 +18,9 @@ def parse_params(param_string):
     dic = {
         "task": params[0],
         "distance_name": params[1][4:],
-        "alpha": float(params[2].replace(",", ".")),
-        "eps_1": float(params[3].replace(",", ".")),
-        "eps_2": float(params[4].replace(",", ".")),
-        "acquisition": params[5][3:],
-        "seed": int(params[6][4]),
+        "unc_obj": params[2][3:],
+        "acquisition": params[3][3:],
+        "seed": int(params[4][4]),
     }
 
     return dic

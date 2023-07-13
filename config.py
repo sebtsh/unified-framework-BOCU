@@ -8,9 +8,7 @@ def get_config(add_compulsory_args):
     if add_compulsory_args:
         parser.add_argument("task", type=str)
         parser.add_argument("distance_name", type=str)
-        parser.add_argument("alpha", type=float)
-        parser.add_argument("eps_1", type=float)
-        parser.add_argument("eps_2", type=float)
+        parser.add_argument("unc_obj", type=str)
         parser.add_argument("acquisition", type=str)
         parser.add_argument("seed", type=int)
 
@@ -18,6 +16,8 @@ def get_config(add_compulsory_args):
     parser.add_argument("--context_dims", type=int, default=1)
     parser.add_argument("--decision_density_per_dim", type=int, default=32)
     parser.add_argument("--context_density_per_dim", type=int, default=32)
+    parser.add_argument("--ref_mean", type=float, default=0.5)
+    parser.add_argument("--ref_var", type=float, default=0.2)
 
     parser.add_argument("--T", type=int, default=400)
     parser.add_argument("--outputscale", type=float, default=1.0)
@@ -28,7 +28,6 @@ def get_config(add_compulsory_args):
     parser.add_argument("--kernel", type=str, default="se")
     parser.add_argument("--gp_sample_num_points", type=int, default=1000)
     parser.add_argument("--rff_num_samples", type=int, default=1024)
-
     parser.add_argument("--finite_diff_h", type=float, default=0.001)
     parser.add_argument("--beta", type=float, default=2.0, help="beta for GP-UCB")
     parser.add_argument("--jitter", type=float, default=1e-06)
@@ -49,9 +48,28 @@ def set_dir_attributes(config):
     config.figures_save_dir = figures_save_dir
 
     filename = (
-        f"{task}_dist{config.distance_name}_{config.alpha}_{config.eps_1}"
-        f"_{config.eps_2}_acq{config.acquisition}_seed{config.seed}"
+        f"{task}_dist{config.distance_name}_unc{config.unc_obj}_acq{config.acquisition}_seed{config.seed}"
     )
     config.filename = filename.replace(".", ",")
+
+    return config
+
+
+def set_unc_attributes(config):
+    unc_obj = config.unc_obj
+    if unc_obj == "dro":
+        alpha = 1.0
+        beta = 0.0
+    elif unc_obj == "wcs":
+        alpha = 0.0
+        beta = 1.0
+    elif unc_obj == "gen":
+        alpha = 1.0
+        beta = 1.0
+    else:
+        raise NotImplementedError
+
+    config.alpha = alpha
+    config.beta = beta
 
     return config

@@ -12,6 +12,7 @@ def compute_regret(
     context_points,
     cvx_prob,
     cvx_prob_plus_h,
+    h,
     chosen_X,
     config,
 ):
@@ -27,8 +28,8 @@ def compute_regret(
         cvx_prob=cvx_prob,
         cvx_prob_plus_h=cvx_prob_plus_h,
         alpha=config.alpha,
-        eps_2=config.eps_2,
-        h=config.finite_diff_h,
+        beta=config.beta,
+        h=h,
     )
     chosen_idxs = get_indices_from_ref_array(input=chosen_X, ref=decision_points)
     chosen_vals = all_unc_obj_vals[chosen_idxs]

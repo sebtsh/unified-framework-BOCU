@@ -1,30 +1,31 @@
 import cvxpy as cp
 import numpy as np
+from scipy.stats import multivariate_normal
 import torch
 
 from core.utils import log
 
 
-def compute_unc_objective(discrete_fvals, cvx_prob, cvx_prob_plus_h, alpha, eps_2, h):
+def compute_unc_objective(discrete_fvals, cvx_prob, cvx_prob_plus_h, alpha, beta, h):
     """
-    Computes g(x) = alpha * v_x(eps_1) + \delta_x(eps_1) * eps_2, where v_x is the distributionally robust value
-    and \delta_x is the right derivative of v_x.
+    Computes g(x) = alpha * v_x(eps) + beta * delta_x(eps), where v_x is the distributionally robust value
+    and delta_x is the right derivative of v_x.
     :param discrete_fvals: Array of shape (|D|, |C|) where D is the decision variable set and C is the context variable
     set.
     :param cvx_prob:
     :param cvx_prob_plus_h:
     :param alpha: float.
-    :param eps_2: float.
+    :param beta: float.
     :param h: float. Finite difference amount.
     :return:
     """
-    assert alpha > 0 or eps_2 > 0
+    assert alpha > 0 or beta > 0
     v_x = compute_dr_values(
         discrete_fvals=discrete_fvals,
         cvx_prob=cvx_prob,
     )
 
-    if eps_2 > 0:
+    if beta > 0:
         v_x_plus_h = compute_dr_values(
             discrete_fvals=discrete_fvals, cvx_prob=cvx_prob_plus_h
         )
@@ -33,11 +34,11 @@ def compute_unc_objective(discrete_fvals, cvx_prob, cvx_prob_plus_h, alpha, eps_
     else:
         delta_x = 0
 
-    return alpha * v_x + delta_x * eps_2
+    return alpha * v_x + beta * delta_x
 
 
 def compute_unc_objective_ucb(
-    discrete_ucb_vals, discrete_lcb_vals, cvx_prob, cvx_prob_plus_h, alpha, eps_2, h
+    discrete_ucb_vals, discrete_lcb_vals, cvx_prob, cvx_prob_plus_h, alpha, beta, h
 ):
     """
     Same as compute_unc_objective except using upper and lower confidence bounds as functions.
@@ -48,17 +49,17 @@ def compute_unc_objective_ucb(
     :param cvx_prob:
     :param cvx_prob_plus_h:
     :param alpha: float.
-    :param eps_2: float.
+    :param beta: float.
     :param h: float. Finite difference amount.
     :return:
     """
-    assert alpha > 0 or eps_2 > 0
+    assert alpha > 0 or beta > 0
     v_x_ucb = compute_dr_values(
         discrete_fvals=discrete_ucb_vals,
         cvx_prob=cvx_prob,
     )
 
-    if eps_2 > 0:
+    if beta > 0:
         v_x_plus_h_ucb = compute_dr_values(
             discrete_fvals=discrete_ucb_vals, cvx_prob=cvx_prob_plus_h
         )
@@ -68,7 +69,7 @@ def compute_unc_objective_ucb(
     else:
         delta_x = 0
 
-    return alpha * v_x_ucb + delta_x * eps_2
+    return alpha * v_x_ucb + beta * delta_x
 
 
 def compute_dr_values(discrete_fvals, cvx_prob):
@@ -141,6 +142,20 @@ def get_discrete_uniform_dist(context_points):
     return torch.ones(len(context_points)) * (1 / len(context_points))
 
 
+def get_discrete_normal_dist(context_points, mean, cov):
+    """
+    Returns an array of shape |C| that is a probability distribution over the context set. Uses the normal distribution
+    with the specified mean and variance.
+    :param context_points: Array of shape (|C|, d)
+    :param mean: array of shape (d, )
+    :param cov: array of shape (d, d)
+    :return: array of shape (|C|, )
+    """
+    rv = multivariate_normal(mean=mean, cov=cov, allow_singular=False)
+    pdfs = rv.pdf(context_points)
+    return torch.tensor(pdfs / np.sum(pdfs))
+
+
 def tv(p, q):
     """
     Calculates the total variation distance between 2 discrete distributions.
@@ -148,7 +163,12 @@ def tv(p, q):
     :param q: array of shape (|C|, )
     :return: float
     """
-    return torch.linalg.norm(p - q, ord=1)
+    return torch.linalg.norm(p - q, ord=1).item()
+
+
+def mmd(p, q, M):
+    v = p - q
+    return torch.sqrt(v @ M @ v).item()
 
 
 def check_psd(A):
@@ -160,3 +180,12 @@ def check_psd(A):
     # probably not necessary but
     sign, logdet = np.linalg.slogdet(A)
     assert np.allclose(sign, 1.0)
+
+
+def compute_distance(p, q, M, distance_name):
+    if distance_name == "tv":
+        return tv(p, q)
+    elif distance_name == "mmd":
+        return mmd(p, q, M)
+    else:
+        raise NotImplementedError

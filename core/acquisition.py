@@ -91,7 +91,7 @@ def thompson_sampling(
         cvx_prob=cvx_prob,
         cvx_prob_plus_h=cvx_prob_plus_h,
         alpha=config.alpha,
-        eps_2=config.eps_2,
+        beta=config.beta,
         h=config.finite_diff_h,
     )
 
@@ -122,7 +122,7 @@ def ucb(gp, decision_points, context_points, cvx_prob, cvx_prob_plus_h, config):
         cvx_prob=cvx_prob,
         cvx_prob_plus_h=cvx_prob_plus_h,
         alpha=config.alpha,
-        eps_2=config.eps_2,
+        beta=config.beta,
         h=config.finite_diff_h,
     )
 
