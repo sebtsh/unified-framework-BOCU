@@ -1,5 +1,5 @@
 import datetime
-from gpytorch.kernels import ScaleKernel, RBFKernel
+from gpytorch.kernels import ScaleKernel, RFFKernel, RBFKernel
 from gpytorch.likelihoods.gaussian_likelihood import GaussianLikelihood
 import numpy as np
 import torch
@@ -71,8 +71,15 @@ def uniform_samples(bounds, n_samples):
     return torch.rand(size=(n_samples, d), dtype=torch.double) * (high - low) + low
 
 
-def create_kernel(dims, config):
-    kernel = ScaleKernel(RBFKernel(ard_num_dims=dims))
+def create_kernel(dims, kernel_name, config):
+    if kernel_name == "se":
+        base_kernel = RBFKernel(ard_num_dims=dims)
+    elif kernel_name == "rff":
+        base_kernel = RFFKernel(ard_num_dims=dims, num_samples=config.rff_num_samples)
+    else:
+        raise NotImplementedError
+
+    kernel = ScaleKernel(base_kernel)
     kernel.outputscale = config.outputscale
     kernel.base_kernel.lengthscale = torch.tensor([config.lengthscale] * dims)
 

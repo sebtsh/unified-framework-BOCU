@@ -1,8 +1,6 @@
 import torch
-from tqdm import trange
 
 from core.acquisition import acquire
-from core.model import ExactGPModel
 from core.utils import log
 
 
@@ -20,17 +18,14 @@ def bo_loop(
     config,
 ):
     chosen_X = []
-    for t in trange(config.T):
-        # log(f"Iteration {t}")
-        gp = ExactGPModel(
-            train_x=train_Z,
-            train_y=torch.squeeze(train_y),
-            kernel=kernel,
-            likelihood=likelihood,
-        )
+    for t in range(config.T):
+        log(f"Iteration {t}")
 
         x_t = acquire(
-            gp=gp,
+            train_X=train_Z,
+            train_y=train_y,
+            likelihood=likelihood,
+            kernel=kernel,
             decision_points=decision_points,
             context_points=context_points,
             cvx_prob=cvx_prob,

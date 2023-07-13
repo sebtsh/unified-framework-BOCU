@@ -1,16 +1,44 @@
+from botorch.models import SingleTaskGP
+from contextlib import ExitStack
+import gpytorch.settings as gpts
 import numpy as np
 import torch
 
 from core.uncertainty import compute_unc_objective, compute_unc_objective_ucb
-from core.utils import cross_product, get_discrete_fvals
+from core.utils import create_kernel, cross_product, get_discrete_fvals
 
 
-def acquire(gp, decision_points, context_points, cvx_prob, cvx_prob_plus_h, config):
+def acquire(
+    train_X,
+    train_y,
+    likelihood,
+    kernel,
+    decision_points,
+    context_points,
+    cvx_prob,
+    cvx_prob_plus_h,
+    config,
+):
     acquisition = config.acquisition
 
     if acquisition == "random":
         best_idx = random(decision_points=decision_points)
     elif acquisition == "ts":
+        assert (
+            config.kernel == "se"
+        )  # otherwise this RFF kernel is using the wrong features
+        rff_kernel = create_kernel(
+            dims=config.decision_dims + config.context_dims,
+            kernel_name="rff",
+            config=config,
+        )
+        gp = SingleTaskGP(
+            train_X=train_X,
+            train_Y=train_y,
+            likelihood=likelihood,
+            covar_module=rff_kernel,
+        )
+
         best_idx = thompson_sampling(
             gp=gp,
             decision_points=decision_points,
@@ -20,6 +48,10 @@ def acquire(gp, decision_points, context_points, cvx_prob, cvx_prob_plus_h, conf
             config=config,
         )
     elif acquisition == "ucb":
+        gp = SingleTaskGP(
+            train_X=train_X, train_Y=train_y, likelihood=likelihood, covar_module=kernel
+        )
+
         best_idx = ucb(
             gp=gp,
             decision_points=decision_points,
@@ -39,8 +71,17 @@ def thompson_sampling(
 ):
     gp.eval()
     joint_points = cross_product(decision_points, context_points)
-    pred = gp(joint_points)
-    fvals = pred.sample()  # (len(points), )
+    # pred = gp(joint_points)
+    # fvals = pred.sample()  # (len(points), )
+
+    with ExitStack() as es:
+        # RFF settings
+        es.enter_context(gpts.fast_computations(covar_root_decomposition=True))
+
+    with torch.no_grad():
+        posterior = gp.posterior(joint_points)
+        fvals = posterior.rsample().squeeze([0, -1])
+
     discrete_fvals = get_discrete_fvals(
         fvals=fvals, decision_points=decision_points, context_points=context_points
     )

@@ -38,7 +38,9 @@ def run_exp(config):
 
     # Get objective function
     kernel = create_kernel(
-        dims=config.decision_dims + config.context_dims, config=config
+        dims=config.decision_dims + config.context_dims,
+        kernel_name=config.kernel,
+        config=config,
     )
     likelihood = create_likelihood(config)
     obj_func, noisy_obj_func = get_objective(
@@ -53,7 +55,9 @@ def run_exp(config):
     # Create cvxpy problems. WARNING: currently assumes reference distribution and margin is the same for all
     # iterations. If not true, new cvxpy problems must be created at every iteration
     if config.distance_name == "mmd":
-        mmd_kernel = create_kernel(dims=config.context_dims, config=config)
+        mmd_kernel = create_kernel(
+            dims=config.context_dims, kernel_name=config.kernel, config=config
+        )
     else:
         mmd_kernel = None
     cvx_prob = create_cvx_prob(

@@ -17,7 +17,7 @@ def get_config(add_compulsory_args):
     parser.add_argument("--decision_dims", type=int, default=2)
     parser.add_argument("--context_dims", type=int, default=1)
     parser.add_argument("--decision_density_per_dim", type=int, default=32)
-    parser.add_argument("--context_density_per_dim", type=int, default=16)
+    parser.add_argument("--context_density_per_dim", type=int, default=32)
 
     parser.add_argument("--T", type=int, default=400)
     parser.add_argument("--outputscale", type=float, default=1.0)
@@ -25,7 +25,9 @@ def get_config(add_compulsory_args):
     parser.add_argument("--noise_std", type=float, default=0.01)
     parser.add_argument("--num_init_points", type=int, default=5)
 
+    parser.add_argument("--kernel", type=str, default="se")
     parser.add_argument("--gp_sample_num_points", type=int, default=1000)
+    parser.add_argument("--rff_num_samples", type=int, default=1024)
 
     parser.add_argument("--finite_diff_h", type=float, default=0.001)
     parser.add_argument("--beta", type=float, default=2.0, help="beta for GP-UCB")
