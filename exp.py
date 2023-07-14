@@ -2,7 +2,12 @@ import numpy as np
 import pickle
 import torch
 
-from config import get_config, set_dir_attributes, set_unc_attributes
+from config import (
+    get_config,
+    set_dir_attributes,
+    set_task_attributes,
+    set_unc_attributes,
+)
 from core.metrics import compute_regret
 from core.objectives import get_objective
 from core.optimization import bo_loop
@@ -25,7 +30,9 @@ from core.utils import (
 def run_exp(config):
     log(f"======== NEW RUN ========")
     config = set_dir_attributes(config)
+    config = set_task_attributes(config)
     config = set_unc_attributes(config)
+
     for arg in vars(config):
         print(f"{arg}: {getattr(config, arg)}")
     torch.manual_seed(config.seed)
@@ -54,7 +61,7 @@ def run_exp(config):
         kernel=kernel, bounds=joint_bounds, config=config
     )
 
-    # Get reference and true distribution
+    # Get reference and true distribution, and margin eps
     ref_mean = config.ref_mean * np.ones(config.context_dims)
     ref_cov = config.ref_var * np.eye(config.context_dims)
     ref_dist = get_discrete_normal_dist(

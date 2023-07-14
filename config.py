@@ -12,14 +12,10 @@ def get_config(add_compulsory_args):
         parser.add_argument("acquisition", type=str)
         parser.add_argument("seed", type=int)
 
-    parser.add_argument("--decision_dims", type=int, default=2)
-    parser.add_argument("--context_dims", type=int, default=1)
-    parser.add_argument("--decision_density_per_dim", type=int, default=32)
-    parser.add_argument("--context_density_per_dim", type=int, default=32)
     parser.add_argument("--ref_mean", type=float, default=0.5)
     parser.add_argument("--ref_var", type=float, default=0.2)
 
-    parser.add_argument("--T", type=int, default=400)
+    parser.add_argument("--T", type=int, default=1000)
     parser.add_argument("--outputscale", type=float, default=1.0)
     parser.add_argument("--lengthscale", type=float, default=0.1)
     parser.add_argument("--noise_std", type=float, default=0.01)
@@ -47,9 +43,7 @@ def set_dir_attributes(config):
     config.pickles_save_dir = pickles_save_dir
     config.figures_save_dir = figures_save_dir
 
-    filename = (
-        f"{task}_dist{config.distance_name}_unc{config.unc_obj}_acq{config.acquisition}_seed{config.seed}"
-    )
+    filename = f"{task}_dist{config.distance_name}_unc{config.unc_obj}_acq{config.acquisition}_seed{config.seed}"
     config.filename = filename.replace(".", ",")
 
     return config
@@ -71,5 +65,34 @@ def set_unc_attributes(config):
 
     config.alpha = alpha
     config.beta = beta
+
+    return config
+
+
+def set_task_attributes(config):
+    task = config.task
+
+    if task == "gp":
+        decision_dims = 2
+        context_dims = 2
+        decision_density_per_dim = 32
+        context_density_per_dim = 8
+    elif task == "plant":
+        decision_dims = 3
+        context_dims = 2
+        decision_density_per_dim = 10
+        context_density_per_dim = 8
+    elif task == "infection":
+        decision_dims = 2
+        context_dims = 3
+        decision_density_per_dim = 32
+        context_density_per_dim = 4
+    else:
+        raise NotImplementedError
+
+    config.decision_dims = decision_dims
+    config.context_dims = context_dims
+    config.decision_density_per_dim = decision_density_per_dim
+    config.context_density_per_dim = context_density_per_dim
 
     return config
