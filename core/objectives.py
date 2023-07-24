@@ -1,8 +1,11 @@
+import gpflow as gpf
+import numpy as np
 import pickle
+import tensorflow as tf
+import tensorflow_probability as tfp
 import torch
 
 from core.utils import uniform_samples
-from data.plant.plant_funcs import create_leaf_max_area_func
 
 
 def get_objective(kernel, bounds, config):
@@ -16,12 +19,26 @@ def get_objective(kernel, bounds, config):
             jitter=config.jitter,
         )
     elif task == "plant":
-        bounds = torch.tensor(
-            [[0, 7.7], [0, 3.5], [0, 10.4], [8.9, 11.3], [2.5, 6.5]], dtype=torch.double
-        ).T
-        leafarea_meanvar_func = create_leaf_max_area_func(standardize=True)
-        obj_func = lambda x: torch.tensor(leafarea_meanvar_func(x.numpy())[0])
-        obj_func = input_transform_wrapper(obj_func=obj_func, bounds=bounds)
+        # bounds = torch.tensor(
+        #     [[0, 7.7], [0, 3.5], [0, 10.4], [8.9, 11.3], [2.5, 6.5]], dtype=torch.double
+        # ).T
+        # leafarea_meanvar_func = create_leaf_max_area_func(standardize=True)
+        # obj_func = lambda x: torch.tensor(leafarea_meanvar_func(x.numpy())[0])
+        # obj_func = input_transform_wrapper(obj_func=obj_func, bounds=bounds)
+
+        NH3pH_leaf_max_area_func, _, _ = create_synth_funcs(params='NH3pH')
+
+        def NH3pH_wrapper(vals):
+            X = np.zeros(vals.shape)
+            X[:, 0] = vals[:, 1] * 30000
+            X[:, 1] = 2.5 + vals[:, 0] * (6.5 - 2.5)
+
+            mean, _ = NH3pH_leaf_max_area_func(X)
+            leaf_mean = 67.2466342112483
+            leaf_std = 59.347376136036964
+            return torch.tensor((mean - leaf_mean) / leaf_std)
+
+        obj_func = NH3pH_wrapper
     elif task == "infection":
         X, y = pickle.load(open("data/infection/infection_X_y.p", "rb"))
         X_torch = torch.tensor(X)
@@ -87,3 +104,62 @@ def input_transform_wrapper(obj_func, bounds):
 
 def input_transform(x, bounds):
     return x * (bounds[1] - bounds[0]) + bounds[0]
+
+
+def create_synth_funcs(params):
+    """
+
+    :param params:
+    :return:
+    """
+    gp_leaf_dict = pickle.load(open(f"data/plant/{params}_gp_leaf_dict.p", "rb"))
+    leaf_mean, leaf_std, tbm_mean, tbm_std, tbs_mean, tbs_std, num_inducing, d = pickle.load(
+        open(f"data/plant/{params}_req_variables.p", "rb"))
+
+    gp_leaf = init_heteroscedastic_gp(num_inducing=num_inducing, d=d)
+    gpf.utilities.multiple_assign(gp_leaf, gp_leaf_dict)
+
+    def leaf_max_area_func(X):
+        """
+        Returns the predictive mean and variance of the maximum leaf area.
+        :param X: Array of shape (num_preds, d).
+        :return: Tuple (array of shape (num_preds, 1), array of shape (num_preds, 1). First element is mean, second
+        is variance.
+        """
+        mean, var = gp_leaf.predict_y(X)
+        return mean.numpy() * leaf_std + leaf_mean, var.numpy() * (leaf_std**2)
+
+    return leaf_max_area_func, None, None
+
+
+def init_heteroscedastic_gp(num_inducing, d):
+    """
+    Initializes default heteroscedastic GP, so that we can load the parameters later.
+    :param num_inducing:
+    :param d:
+    :return:
+    """
+    likelihood = gpf.likelihoods.HeteroskedasticTFPConditional(
+        distribution_class=tfp.distributions.Normal,  # Gaussian Likelihood
+        scale_transform=tfp.bijectors.Exp(),  # Exponential Transform
+    )
+
+    kernels = [
+        gpf.kernels.SquaredExponential(lengthscales=np.ones(d)),
+        gpf.kernels.SquaredExponential(lengthscales=np.ones(d))
+    ]
+
+    kernel = gpf.kernels.SeparateIndependent(kernels)
+
+    Z = tf.zeros((num_inducing, d))
+    inducing_variable = gpf.inducing_variables.SeparateIndependentInducingVariables(
+        [
+            gpf.inducing_variables.InducingPoints(Z),  # This is U1 = f1(Z1)
+            gpf.inducing_variables.InducingPoints(Z),  # This is U2 = f2(Z2)
+        ])
+
+    model = gpf.models.SVGP(kernel=kernel,
+                            likelihood=likelihood,
+                            inducing_variable=inducing_variable,
+                            num_latent_gps=likelihood.latent_dim)
+    return model

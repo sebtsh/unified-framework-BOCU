@@ -49,8 +49,7 @@ def set_dir_attributes(config):
     return config
 
 
-def set_unc_attributes(config):
-    unc_obj = config.unc_obj
+def get_alpha_beta(unc_obj):
     if unc_obj == "dro":
         alpha = 1.0
         beta = 0.0
@@ -62,6 +61,13 @@ def set_unc_attributes(config):
         beta = 1.0
     else:
         raise NotImplementedError
+
+    return alpha, beta
+
+
+def set_unc_attributes(config):
+    unc_obj = config.unc_obj
+    alpha, beta = get_alpha_beta(unc_obj)
 
     config.alpha = alpha
     config.beta = beta
@@ -78,10 +84,10 @@ def set_task_attributes(config):
         decision_density_per_dim = 32
         context_density_per_dim = 8
     elif task == "plant":
-        decision_dims = 3
-        context_dims = 2
-        decision_density_per_dim = 10
-        context_density_per_dim = 8
+        decision_dims = 1
+        context_dims = 1
+        decision_density_per_dim = 1024
+        context_density_per_dim = 64
     elif task == "infection":
         decision_dims = 2
         context_dims = 3

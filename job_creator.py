@@ -5,7 +5,7 @@ import shutil
 create_jobs = True
 is_delete = True
 
-tasks = ["gp", "plant", "infection"]
+tasks = ["plant", "infection", "gp"]
 distance_names = ["mmd", "tv"]
 unc_objs = ["dro", "wcs", "gen"]
 acquisitions = ["ts", "ucb", "random"]
