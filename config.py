@@ -83,6 +83,11 @@ def set_task_attributes(config):
         context_dims = 2
         decision_density_per_dim = 32
         context_density_per_dim = 8
+    elif task == "hartmann":
+        decision_dims = 2
+        context_dims = 1
+        decision_density_per_dim = 32
+        context_density_per_dim = 64
     elif task == "plant":
         decision_dims = 1
         context_dims = 1

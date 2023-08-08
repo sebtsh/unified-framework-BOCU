@@ -37,7 +37,7 @@ def compute_unc_objective(discrete_fvals, cvx_prob, cvx_prob_plus_h, alpha, beta
     return alpha * v_x + beta * delta_x
 
 
-def compute_unc_objective_ucb(
+def compute_unc_objective_ucb_naive(
     discrete_ucb_vals, discrete_lcb_vals, cvx_prob, cvx_prob_plus_h, alpha, beta, h
 ):
     """

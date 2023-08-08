@@ -1,3 +1,4 @@
+from botorch import test_functions
 import gpflow as gpf
 import numpy as np
 import pickle
@@ -18,15 +19,14 @@ def get_objective(kernel, bounds, config):
             num_points=config.gp_sample_num_points,
             jitter=config.jitter,
         )
-    elif task == "plant":
-        # bounds = torch.tensor(
-        #     [[0, 7.7], [0, 3.5], [0, 10.4], [8.9, 11.3], [2.5, 6.5]], dtype=torch.double
-        # ).T
-        # leafarea_meanvar_func = create_leaf_max_area_func(standardize=True)
-        # obj_func = lambda x: torch.tensor(leafarea_meanvar_func(x.numpy())[0])
-        # obj_func = input_transform_wrapper(obj_func=obj_func, bounds=bounds)
+    elif task == "hartmann":
+        neg_obj = test_functions.Hartmann(dim=3, negate=True)
+        orig_bounds = neg_obj.bounds.to(dtype=torch.double)
+        unsqueezed_obj = lambda x: neg_obj(x).unsqueeze(-1)
+        obj_func = input_transform_wrapper(obj_func=unsqueezed_obj, bounds=orig_bounds)
 
-        NH3pH_leaf_max_area_func, _, _ = create_synth_funcs(params='NH3pH')
+    elif task == "plant":
+        NH3pH_leaf_max_area_func, _, _ = create_synth_funcs(params="NH3pH")
 
         def NH3pH_wrapper(vals):
             X = np.zeros(vals.shape)
@@ -113,8 +113,16 @@ def create_synth_funcs(params):
     :return:
     """
     gp_leaf_dict = pickle.load(open(f"data/plant/{params}_gp_leaf_dict.p", "rb"))
-    leaf_mean, leaf_std, tbm_mean, tbm_std, tbs_mean, tbs_std, num_inducing, d = pickle.load(
-        open(f"data/plant/{params}_req_variables.p", "rb"))
+    (
+        leaf_mean,
+        leaf_std,
+        tbm_mean,
+        tbm_std,
+        tbs_mean,
+        tbs_std,
+        num_inducing,
+        d,
+    ) = pickle.load(open(f"data/plant/{params}_req_variables.p", "rb"))
 
     gp_leaf = init_heteroscedastic_gp(num_inducing=num_inducing, d=d)
     gpf.utilities.multiple_assign(gp_leaf, gp_leaf_dict)
@@ -146,7 +154,7 @@ def init_heteroscedastic_gp(num_inducing, d):
 
     kernels = [
         gpf.kernels.SquaredExponential(lengthscales=np.ones(d)),
-        gpf.kernels.SquaredExponential(lengthscales=np.ones(d))
+        gpf.kernels.SquaredExponential(lengthscales=np.ones(d)),
     ]
 
     kernel = gpf.kernels.SeparateIndependent(kernels)
@@ -156,10 +164,13 @@ def init_heteroscedastic_gp(num_inducing, d):
         [
             gpf.inducing_variables.InducingPoints(Z),  # This is U1 = f1(Z1)
             gpf.inducing_variables.InducingPoints(Z),  # This is U2 = f2(Z2)
-        ])
+        ]
+    )
 
-    model = gpf.models.SVGP(kernel=kernel,
-                            likelihood=likelihood,
-                            inducing_variable=inducing_variable,
-                            num_latent_gps=likelihood.latent_dim)
+    model = gpf.models.SVGP(
+        kernel=kernel,
+        likelihood=likelihood,
+        inducing_variable=inducing_variable,
+        num_latent_gps=likelihood.latent_dim,
+    )
     return model

@@ -64,7 +64,9 @@ for task in tasks:
                         print(f"{filename} is missing")
                         continue
 
-                    _, _, simple_regret, cumu_regret = pickle.load(open(pickles_dir + filename, "rb"))
+                    _, _, simple_regret, cumu_regret = pickle.load(
+                        open(pickles_dir + filename, "rb")
+                    )
                     simple_regrets.append(simple_regret)
                     cumu_regrets.append(cumu_regret)
 
@@ -77,7 +79,9 @@ for task in tasks:
                 )
 
                 mean_cumu_regrets = np.mean(cumu_regrets, axis=0)
-                std_err_cumu_regrets = np.std(cumu_regrets, axis=0) / np.sqrt(len(cumu_regrets))
+                std_err_cumu_regrets = np.std(cumu_regrets, axis=0) / np.sqrt(
+                    len(cumu_regrets)
+                )
 
                 T = len(mean_simple_regrets)
                 xaxis = np.arange(T)
@@ -97,7 +101,10 @@ for task in tasks:
                 )
 
                 axs_cumu.plot(
-                    xaxis, mean_cumu_regrets, label=acq_name_dict[acquisition], color=color
+                    xaxis,
+                    mean_cumu_regrets,
+                    label=acq_name_dict[acquisition],
+                    color=color,
                 )
                 axs_cumu.fill_between(
                     xaxis,
@@ -138,8 +145,8 @@ for task in tasks:
         )
         fig_cumu.tight_layout()
         fig_cumu.savefig(
-            save_dir + f"{task}-{unc_obj}_cumu_regret.pdf",
+            save_dir + f"{task}-{unc_obj}_cumu_regret.png",
             dpi=dpi,
             bbox_inches="tight",
-            format="pdf",
+            format="png",
         )

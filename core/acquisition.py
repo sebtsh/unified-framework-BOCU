@@ -4,7 +4,7 @@ import gpytorch.settings as gpts
 import numpy as np
 import torch
 
-from core.uncertainty import compute_unc_objective, compute_unc_objective_ucb
+from core.uncertainty import compute_unc_objective, compute_unc_objective_ucb_naive
 from core.utils import create_kernel, cross_product, get_discrete_fvals
 
 
@@ -52,7 +52,20 @@ def acquire(
             train_X=train_X, train_Y=train_y, likelihood=likelihood, covar_module=kernel
         )
 
-        best_idx = ucb(
+        best_idx = ucb_naive(
+            gp=gp,
+            decision_points=decision_points,
+            context_points=context_points,
+            cvx_prob=cvx_prob,
+            cvx_prob_plus_h=cvx_prob_plus_h,
+            config=config,
+        )
+    elif acquisition == "ucbu":
+        gp = SingleTaskGP(
+            train_X=train_X, train_Y=train_y, likelihood=likelihood, covar_module=kernel
+        )
+
+        best_idx = ucb_unjust(
             gp=gp,
             decision_points=decision_points,
             context_points=context_points,
@@ -100,7 +113,7 @@ def thompson_sampling(
     return best_idx
 
 
-def ucb(gp, decision_points, context_points, cvx_prob, cvx_prob_plus_h, config):
+def ucb_naive(gp, decision_points, context_points, cvx_prob, cvx_prob_plus_h, config):
     gp.eval()
     joint_points = cross_product(decision_points, context_points)
 
@@ -116,9 +129,35 @@ def ucb(gp, decision_points, context_points, cvx_prob, cvx_prob_plus_h, config):
         fvals=lcb_vals, decision_points=decision_points, context_points=context_points
     )
 
-    unc_obj_vals = compute_unc_objective_ucb(
+    unc_obj_vals = compute_unc_objective_ucb_naive(
         discrete_ucb_vals=discrete_ucb_vals,
         discrete_lcb_vals=discrete_lcb_vals,
+        cvx_prob=cvx_prob,
+        cvx_prob_plus_h=cvx_prob_plus_h,
+        alpha=config.alpha,
+        beta=config.beta,
+        h=config.finite_diff_h,
+    )
+
+    best_idx = np.argmax(unc_obj_vals)
+
+    return best_idx
+
+
+def ucb_unjust(gp, decision_points, context_points, cvx_prob, cvx_prob_plus_h, config):
+    gp.eval()
+    joint_points = cross_product(decision_points, context_points)
+
+    pred = gp(joint_points)
+    mean = pred.mean
+    variance = pred.variance
+    ucb_vals = mean + config.beta * torch.sqrt(variance)
+    discrete_ucb_vals = get_discrete_fvals(
+        fvals=ucb_vals, decision_points=decision_points, context_points=context_points
+    )
+
+    unc_obj_vals = compute_unc_objective(
+        discrete_fvals=discrete_ucb_vals,
         cvx_prob=cvx_prob,
         cvx_prob_plus_h=cvx_prob_plus_h,
         alpha=config.alpha,

@@ -5,10 +5,10 @@ import shutil
 create_jobs = True
 is_delete = True
 
-tasks = ["plant", "infection", "gp"]
+tasks = ["hartmann", "plant", "infection", "gp"]
 distance_names = ["mmd", "tv"]
 unc_objs = ["dro", "wcs", "gen"]
-acquisitions = ["ts", "ucb", "random"]
+acquisitions = ["ts", "ucb", "ucbu", "random"]
 seeds = range(5)
 
 
