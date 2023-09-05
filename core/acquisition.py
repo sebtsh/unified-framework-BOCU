@@ -15,6 +15,7 @@ def acquire(
     kernel,
     decision_points,
     context_points,
+    ref_dist,
     cvx_prob,
     cvx_prob_plus_h,
     config,
@@ -73,6 +74,29 @@ def acquire(
             cvx_prob_plus_h=cvx_prob_plus_h,
             config=config,
         )
+    elif acquisition == "so":
+        gp = SingleTaskGP(
+            train_X=train_X, train_Y=train_y, likelihood=likelihood, covar_module=kernel
+        )
+
+        best_idx = so(
+            gp=gp,
+            decision_points=decision_points,
+            context_points=context_points,
+            ref_dist=ref_dist,
+            config=config,
+        )
+    elif acquisition == "ro":
+        gp = SingleTaskGP(
+            train_X=train_X, train_Y=train_y, likelihood=likelihood, covar_module=kernel
+        )
+
+        best_idx = ro(
+            gp=gp,
+            decision_points=decision_points,
+            context_points=context_points,
+            config=config,
+        )
     else:
         raise NotImplementedError
 
@@ -109,6 +133,40 @@ def thompson_sampling(
     )
 
     best_idx = np.argmax(unc_obj_vals)
+
+    return best_idx
+
+
+def so(gp, decision_points, context_points, ref_dist, config):
+    gp.eval()
+    joint_points = cross_product(decision_points, context_points)
+
+    pred = gp(joint_points)
+    mean = pred.mean
+    variance = pred.variance
+    ucb_vals = mean + config.beta * torch.sqrt(variance)
+    discrete_ucb_vals = get_discrete_fvals(
+        fvals=ucb_vals, decision_points=decision_points, context_points=context_points
+    )
+    obj_vals = (discrete_ucb_vals @ ref_dist).cpu().detach().numpy()
+    best_idx = np.argmax(obj_vals)
+
+    return best_idx
+
+
+def ro(gp, decision_points, context_points, config):
+    gp.eval()
+    joint_points = cross_product(decision_points, context_points)
+
+    pred = gp(joint_points)
+    mean = pred.mean
+    variance = pred.variance
+    ucb_vals = mean + config.beta * torch.sqrt(variance)
+    discrete_ucb_vals = get_discrete_fvals(
+        fvals=ucb_vals, decision_points=decision_points, context_points=context_points
+    ).cpu().detach().numpy()
+    obj_vals = np.min(discrete_ucb_vals, axis=-1)
+    best_idx = np.argmax(obj_vals)
 
     return best_idx
 

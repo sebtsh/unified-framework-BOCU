@@ -115,6 +115,7 @@ def run_exp(config):
         kernel=kernel,
         likelihood=likelihood,
         noisy_obj_func=noisy_obj_func,
+        ref_dist=ref_dist,
         true_dist=true_dist,
         cvx_prob=cvx_prob,
         cvx_prob_plus_h=cvx_prob_plus_h,

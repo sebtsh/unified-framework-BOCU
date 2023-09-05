@@ -5,11 +5,11 @@ import shutil
 create_jobs = True
 is_delete = True
 
-tasks = ["hartmann", "plant", "infection", "gp"]
+tasks = ["gp", "hartmann", "plant", "infection"]
 distance_names = ["mmd", "tv"]
 unc_objs = ["dro", "wcs", "gen"]
-acquisitions = ["ts", "ucb", "ucbu", "random"]
-seeds = range(5)
+acquisitions = ["ts", "ucb", "ucbu", "random", "so", "ro"]
+seeds = range(10)
 
 
 missing_filenames = []
