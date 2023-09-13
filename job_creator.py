@@ -6,7 +6,7 @@ create_jobs = True
 is_delete = True
 
 tasks = ["gp", "hartmann", "plant", "infection"]
-distance_names = ["mmd", "tv"]
+distance_names = ["tv", "mmd"]
 unc_objs = ["dro", "wcs", "gen"]
 acquisitions = ["ts", "ucb", "ucbu", "random", "so", "ro"]
 seeds = range(10)

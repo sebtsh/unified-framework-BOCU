@@ -10,8 +10,8 @@ from config import get_alpha_beta
 tasks = ["gp", "hartmann", "plant", "infection"]
 distance_names = ["tv", "mmd"]
 unc_objs = ["dro", "wcs", "gen"]
-acquisitions = ["ts", "ucb", "ucbu", "random"]
-seeds = range(5)
+acquisitions = ["ts", "ucb", "ucbu", "random", "so", "ro"]
+seeds = range(10)
 
 text_size = 14
 tick_size = 10
@@ -19,15 +19,20 @@ dpi = 300
 
 color_dict = {
     "random": "black",
-    "ucb": "#d7263d",  # red
-    "ucbu": "#fbb13c",  # yellow
-    "ts": "#00a6ed",  # blue
+    "so": "#f76c5e",  # red
+    "ro": "#F6B678",  # yellow
+    "ucb": "#B9B494",  # brown
+    "ucbu": "#7BB1B0",  # green
+    "ts": "#00ABE7",  # blue
+
 }
 acq_name_dict = {
     "random": "Random",
     "ucb": "UCB-1",
     "ucbu": "UCB-2",
     "ts": "TS",
+    "so": "SO",
+    "ro": "RO"
 }
 
 save_dir = "results/summary_results/"
