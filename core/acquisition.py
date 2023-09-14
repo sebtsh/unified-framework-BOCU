@@ -1,9 +1,11 @@
 from botorch.models import SingleTaskGP
 from contextlib import ExitStack
+import copy
 import gpytorch.settings as gpts
 import numpy as np
 import torch
 
+from config import set_unc_attributes
 from core.uncertainty import compute_unc_objective, compute_unc_objective_ucb_naive
 from core.utils import create_kernel, cross_product, get_discrete_fvals
 
@@ -97,6 +99,37 @@ def acquire(
             context_points=context_points,
             config=config,
         )
+    elif acquisition in ["tsdro", "tswcs", "tsgen"]:
+        # hack to force using TS-BOCU with the wrong hyperparameters of alpha, beta, and eps.
+        # Only for results in Appendix.
+        assert (
+            config.kernel == "se"
+        )  # otherwise this RFF kernel is using the wrong features
+        rff_kernel = create_kernel(
+            dims=config.decision_dims + config.context_dims,
+            kernel_name="rff",
+            config=config,
+        )
+        gp = SingleTaskGP(
+            train_X=train_X,
+            train_Y=train_y,
+            likelihood=likelihood,
+            covar_module=rff_kernel,
+        )
+
+        wrong_config = copy.deepcopy(config)
+        acq_unc_obj = acquisition[-3:]
+        wrong_config.unc_obj = acq_unc_obj
+        wrong_config = set_unc_attributes(wrong_config)
+
+        best_idx = thompson_sampling(
+            gp=gp,
+            decision_points=decision_points,
+            context_points=context_points,
+            cvx_prob=cvx_prob,
+            cvx_prob_plus_h=cvx_prob_plus_h,
+            config=wrong_config,
+        )
     else:
         raise NotImplementedError
 
@@ -162,9 +195,16 @@ def ro(gp, decision_points, context_points, config):
     mean = pred.mean
     variance = pred.variance
     ucb_vals = mean + config.beta * torch.sqrt(variance)
-    discrete_ucb_vals = get_discrete_fvals(
-        fvals=ucb_vals, decision_points=decision_points, context_points=context_points
-    ).cpu().detach().numpy()
+    discrete_ucb_vals = (
+        get_discrete_fvals(
+            fvals=ucb_vals,
+            decision_points=decision_points,
+            context_points=context_points,
+        )
+        .cpu()
+        .detach()
+        .numpy()
+    )
     obj_vals = np.min(discrete_ucb_vals, axis=-1)
     best_idx = np.argmax(obj_vals)
 

@@ -102,11 +102,61 @@ def run_exp(config):
         jitter=config.jitter,
     )
 
+    # Hacked cvxpy problems when testing TS-BOCU with the wrong hyperparameters of alpha, beta, and eps. Only for
+    # results in Appendix.
+    if config.acquisition in ["tsdro", "tsgen"] and config.unc_obj == "wcs":
+        margin = compute_distance(
+            p=ref_dist, q=true_dist, M=M, distance_name=config.distance_name
+        )
+        wrong_cvx_prob = create_cvx_prob(
+            p=ref_dist.cpu().detach().numpy(),
+            distance_name=config.distance_name,
+            eps=margin,
+            context_points=context_points,
+            mmd_kernel=mmd_kernel,
+            jitter=config.jitter,
+        )
+        wrong_cvx_prob_plus_h = create_cvx_prob(
+            p=ref_dist.cpu().detach().numpy(),
+            distance_name=config.distance_name,
+            eps=margin + config.finite_diff_h,
+            context_points=context_points,
+            mmd_kernel=mmd_kernel,
+            jitter=config.jitter,
+        )
+    elif config.acquisition == "tswcs" and config.unc_obj in ["dro", "gen"]:
+        wrong_cvx_prob = create_cvx_prob(
+            p=ref_dist.cpu().detach().numpy(),
+            distance_name=config.distance_name,
+            eps=0.0,
+            context_points=context_points,
+            mmd_kernel=mmd_kernel,
+            jitter=config.jitter,
+        )
+        wrong_cvx_prob_plus_h = create_cvx_prob(
+            p=ref_dist.cpu().detach().numpy(),
+            distance_name=config.distance_name,
+            eps=config.finite_diff_h,
+            context_points=context_points,
+            mmd_kernel=mmd_kernel,
+            jitter=config.jitter,
+        )
+    else:
+        wrong_cvx_prob = None
+        wrong_cvx_prob_plus_h = None
+
     # Get initial observations
     init_Z = joint_points[torch.randperm(len(joint_points))[: config.num_init_points]]
     init_y = noisy_obj_func(init_Z)
 
     # Main BO loop
+    if wrong_cvx_prob is None:  # Normal code path
+        cvx_prob_for_acq = cvx_prob
+        cvx_prob_plus_h_for_acq = cvx_prob_plus_h
+    else:  # testing algorithms with wrong hyperparameters
+        cvx_prob_for_acq = wrong_cvx_prob
+        cvx_prob_plus_h_for_acq = wrong_cvx_prob_plus_h
+
     chosen_X, _, _ = bo_loop(
         train_Z=init_Z,
         train_y=init_y,
@@ -117,8 +167,8 @@ def run_exp(config):
         noisy_obj_func=noisy_obj_func,
         ref_dist=ref_dist,
         true_dist=true_dist,
-        cvx_prob=cvx_prob,
-        cvx_prob_plus_h=cvx_prob_plus_h,
+        cvx_prob=cvx_prob_for_acq,
+        cvx_prob_plus_h=cvx_prob_plus_h_for_acq,
         config=config,
     )
 

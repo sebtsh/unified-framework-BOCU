@@ -8,7 +8,7 @@ is_delete = True
 tasks = ["gp", "hartmann", "plant", "infection"]
 distance_names = ["tv", "mmd"]
 unc_objs = ["dro", "wcs", "gen"]
-acquisitions = ["ts", "ucb", "ucbu", "random", "so", "ro"]
+acquisitions = ["ts", "ucb", "ucbu", "random", "so", "ro", "tsdro", "tswcs", "tsgen"]
 seeds = range(10)
 
 
@@ -21,6 +21,16 @@ for task in tasks:
     for distance_name in distance_names:
         for unc_obj in unc_objs:
             for acquisition in acquisitions:
+                if acquisition in [
+                    "tsdro",
+                    "tswcs",
+                    "tsgen",
+                ]:  # Hacked TS-BOCU to use the wrong hyperparameters.
+                    # only for results in Appendix.
+                    acq_unc_obj = acquisition[-3:]
+                    if unc_obj == acq_unc_obj:  # correct, so skip
+                        continue
+
                 for seed in seeds:
                     filename = (
                         f"{task}_dist{distance_name}_unc{unc_obj}"

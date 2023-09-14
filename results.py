@@ -24,7 +24,6 @@ color_dict = {
     "ucb": "#B9B494",  # brown
     "ucbu": "#7BB1B0",  # green
     "ts": "#00ABE7",  # blue
-
 }
 acq_name_dict = {
     "random": "Random",
@@ -32,12 +31,14 @@ acq_name_dict = {
     "ucbu": "UCB-2",
     "ts": "TS",
     "so": "SO",
-    "ro": "RO"
+    "ro": "RO",
 }
 
 save_dir = "results/summary_results/"
 Path(save_dir).mkdir(parents=True, exist_ok=True)
-fig_cumu, all_axs_cumu = plt.subplots(len(tasks), len(unc_objs) * len(distance_names), figsize=(16, 20))
+fig_cumu, all_axs_cumu = plt.subplots(
+    len(tasks), len(unc_objs) * len(distance_names), figsize=(16, 20)
+)
 
 for i, task in enumerate(tasks):
     print(f"================ {task} ================")
@@ -99,8 +100,8 @@ for i, task in enumerate(tasks):
                     color=color,
                 )
 
-                #axs_cumu.set_xlabel("Iteration $t$", size=text_size)
-                #axs_cumu.set_ylabel("Cumulative regret", size=text_size)
+                # axs_cumu.set_xlabel("Iteration $t$", size=text_size)
+                # axs_cumu.set_ylabel("Cumulative regret", size=text_size)
                 axs_cumu.tick_params(labelsize=tick_size)
                 # axs_cumu.legend(fontsize=text_size - 2)
 
